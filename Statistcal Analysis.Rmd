@@ -1,0 +1,677 @@
+---
+title: "Statistical Analysis"
+author: "Aarij Khawaja"
+date: '2019-03-31'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+suppressWarnings(library(ggplot2))
+suppressWarnings(library(gridExtra))
+df <- read.csv('train.csv')
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(lattice)
+df_1 <- df %>% select(log_price, property_type, room_type, accommodates, bathrooms, bed_type, cancellation_policy, city, number_of_reviews, review_scores_rating, bedrooms, beds)%>% mutate(TV = ifelse(grepl("TV", df$amenities), T, F) ) %>% mutate(internet = ifelse(grepl("Internet", df$amenities), T, F) ) %>% mutate(parking = ifelse(grepl("parking", df$amenities), T, F) ) %>% mutate(kitchen = ifelse(grepl("Kitchen", df$amenities), T, F) ) %>% mutate(cleaning_fee = ifelse(grepl("True", df$cleaning_fee), T, F) ) %>%
+mutate(profile_pic = ifelse(grepl("t", df$host_has_profile_pic), T, F) ) %>%
+mutate(instant_bookable = ifelse(grepl("t", df$instant_bookable), T, F) ) %>% 
+filter(property_type=="Apartment"|property_type=="Bed & Breakfast"|property_type=="Boat"|property_type=="Boutique hotel"|property_type=="Bungalow"|property_type=="Cabin"|property_type=="Camper/RV"|property_type=="House"|property_type=="Condominium"|property_type=="Townhouse"|property_type=="Loft"|property_type=="Other"|property_type=="Guesthouse"|property_type=="Villa"|property_type=="Dorm"|property_type=="Guest suite"|property_type=="Timeshare"|property_type=="In-law"|property_type=="Hostel"|property_type=="Serviced apartment"|property_type=="Tent"|property_type=="Castle"|property_type=="Vacation home") %>% filter(cancellation_policy=="flexible"|cancellation_policy=="moderate"|cancellation_policy=="strict")
+new_df <- na.omit(df_1)
+colnames(new_df) <- c("Log_Price", "Property_Type", "Room_Type", "Accommodates", "Bathrooms", "Bed_Type", "Cancellation_Policy", "City", "Number_of_Reviews", "Review_Scores", "Bedrooms", "Beds", "TV", "Internet", "Parking", "Kitchen", "Cleaning_Fee", "Profile_Pic", "Instant_Bookable")
+```
+
+Now that we have the modified dataset 'new_df', we will use that to perform further analysis.
+Main purpose of this analysis is to find the relation between 'Log-Price' and all other factors that influence the price. However, it is important that we first realize the trends within data and the popularity of each variable and popularity of each level within a variable (for categorical variables). To accomplish this we create plots representing each of these variables starting with the dependant variable which is the 'Log_Price'.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+grid.arrange( ggplot(aes(x=Log_Price), 
+        data = new_df) +
+  geom_histogram( bins = 30, fill = 'yellow', color = 'red')+
+    labs(x="Log Price", y="# of Listings"),
+   ggplot(aes(x=1, y=Log_Price), 
+        data = new_df) +
+  geom_boxplot(color = 'blue') +
+    labs(y="Log_Price"), nrow =1, top = "Distribution of Log Price")
+summary(new_df$Log_Price)
+```
+
+The median Log_Price is 4.70 and the data seems to be evenly distributed and the shape of the histogram and the boxplot is approximately symmetric. There are not many outliers. The mean, median and mode are not too distinct. Therefore, we can say that Log_Price has an aproximately normal distribution.
+
+Now we will analyze the relation between Log Price and the relevant predictors.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(GGally)
+ggcorr(new_df) + 
+labs(title = "Correlation plot for Numeric Variables")
+```
+
+Here's a correlation plot from our dataset for all numeric variables even though some of them may be considered categorical such as the variable 'Bedrooms' which has 11 distinct levels. 
+The correlation plot gives us an idea about the impact each of these variables might have over price.
+However, we can't be too certain just by looking at this plot. So, we will use the data and perform tests that will tell us whether there is evidence of any connection between the predictors and Log_Price.
+
+## Property Type
+
+For the purpose of analysis, I have removed the property types which had 10 or less listings because the sample size is too small to conclude anything about those properties.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+reorder_size <- function(x) {
+  factor(x, levels = names(sort(table(x), decreasing = TRUE)))
+}
+ggplot(new_df, aes(reorder_size(Property_Type))) + 
+  geom_bar(aes(fill = Property_Type)) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), panel.grid = element_blank()) + 
+  scale_y_log10() +
+  labs(title="Distribution of Airbnb Listings by Property Type", x="Property Type", y="# of Listings")
+```
+
+While looking at the plot we find that the most common types of listings are apartments, houses and condominiums.
+Now, we analyze the relationship between the property types and the price.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(Property_Type, 
+            Log_Price), 
+        data = new_df) + 
+  geom_jitter( alpha = .1)  + 
+  geom_boxplot( alpha = .5,color = 'blue')+labs(x="Property Type", y="Log Price", title = "Distribution of Log Price by Property Type")+
+  theme(axis.text.x=element_text(angle = 90, hjust = 0.5), panel.grid = element_blank())+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4) 
+```
+
+By looking at the chart, we can comfortably say that prices for luxury rentals like boats or condominiums or vacation homes are higher than those of regular apartments, cabins or hostels. We will now perform futher analysis on the impacts of these various property types on the final price of the listing.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+prop<-lm(formula = Log_Price ~ Property_Type, data = new_df)
+summary(prop)
+```
+
+After performing some analysis on the various property types and how they affect our dependant variable which is Log_price, we find out that some of these property types seem to influence the price greatly than the others. For example the p-values for the first three types: 'Bed & Breakfast', 'Boat' and 'Boutique Hotel' are significantly low. This suggests that we have sufficient evidence to reject the null hypothesis (there is no difference in price between the property types) and therefore, the type of property does affect the price.
+
+## Room Type
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=Room_Type), data=new_df)+
+  geom_bar(aes(fill = Room_Type)) +
+  theme(panel.grid = element_blank())+
+  labs(x="Room Type", y="# of Listings", title = "Distribution of Airbnb Listings by Room Type")
+```
+
+Compared to an entire home/apartment or a private room, very few people on Airbnb prefer a shared room to rent.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(Room_Type, 
+            Log_Price), 
+        data = new_df) + 
+  geom_jitter( alpha = .1)  + 
+  geom_boxplot( alpha = .5,color = 'blue')+
+  theme(panel.grid = element_blank())+
+  labs(x="Room Type", y = "Log Price", title = "Distribution of Log Price by Room Type")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4) 
+```
+
+In terms of price it seems like the price range for an entire house/apartment is higher than that of a private room and the average price of a shared room is the lowest. This seems like a reasonable assumption. However, to be certain about the connection between the type of rooms and price, we will look at the p-values. 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+room<-lm(formula = Log_Price ~ Room_Type, data = new_df)
+summary(room)
+```
+
+The p-values for the coefficients suggests that all room types affect the price differently. With an entire home/apartment having a relatively higher price compared to a private room or a shared room. 
+
+## Accommodates
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+Accommodate <- factor(new_df$Accommodates)
+ggplot(aes(x=Accommodate), data=new_df)+
+  labs(x="Accommodation", y="# of Listings", title = "Distribution of Airbnb Listings by Accommodation")+
+  theme(panel.grid = element_blank())+
+  geom_bar(aes(fill = Accommodate))
+```
+
+By looking at the graph, we can assume that most of the listings in our dataset are for property types that accommodate between 1-6 people. There's a very small number of properties that accommodate 7 or more people. 
+
+Let's now look at 2 different plots displaying the relationship between the predictor 'Accommodates' and the response variable 'Log_Price'.
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot1<-ggplot(aes(Accommodate, 
+            Log_Price), 
+        data = new_df) + 
+  geom_boxplot( alpha = .5,color = 'blue')+
+  labs(x="Accommodation", y="Log Price")+
+  theme(panel.grid = element_blank())+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)
+
+plot2<-ggplot(aes(Accommodates, 
+            Log_Price), 
+        data = new_df) +
+  geom_jitter(alpha=0.1)+
+  geom_smooth()+
+  theme(panel.grid = element_blank())+
+  labs(x="Accommodation", y= "Log Price")
+
+grid.arrange(plot1, plot2, nrow=2, top = "Distribution of Log Price by Accommodation")
+```
+
+We can see an increasing trend in the graphs of 'Accommodates' vs 'Log_Price'. This means listings that accommodate more people have a higher price in general. Again, that seems like a reasonable assumption. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+accom<-lm(formula = Log_Price ~ Accommodate, data = new_df)
+summary(accom)
+```
+
+We can notice that the coefficients for each level of accommodation are fairly diffrent from each other and follow an increasing trend which confirms the earlier assumption that listings that accommodate more people have a higher price in general.
+
+## Bathrooms
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+Bathroom <- factor(new_df$Bathrooms)
+ggplot(aes(x=Bathroom), data=new_df)+
+  geom_bar(aes(fill = Bathroom))+
+  theme(panel.grid = element_blank())+
+  scale_y_log10()+
+  labs(x="Bathrooms", y="# of Listings", title = "Distribution of Airbnb Listings by # of Bathrooms")
+```
+
+Looking at this graph, we can say that most properties offer either one or two bathrooms. 
+We will now take a closer look at the plot of Bathrooms vs Log_Price to see if the number of bathrooms have an effect on the price of the property.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(Bathroom, 
+            Log_Price), 
+        data = new_df) + 
+  geom_jitter( alpha = .1)  + 
+  geom_boxplot( alpha = .5,color = 'blue')+
+  theme(panel.grid = element_blank())+
+  labs(x="Bathrooms", y="log price", title = "Distribution of Log Price by # of Bathrooms")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4) 
+```
+
+We can see a similar trend to what we saw in the plot for 'Accommodates'. More bathrooms generally means a larger house/apartment and therefore the average price is higher for properties with more bathrooms. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+bath<-lm(formula = Log_Price ~ Bathroom, data = new_df)
+summary(bath)
+```
+
+The p-values are significant across all levels of the factor variable 'Bathrooms'. Also, the difference in coefficients across these levels tells us that the price changes with an increase or decrease in the number of bathrooms. 
+
+## Bed Type
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=Bed_Type), data=new_df)+
+  geom_bar(aes(fill = Bed_Type))+
+  scale_y_log10()+
+  theme(panel.grid = element_blank())+
+  labs(x="Bed Type", y="# of Listings", title = "Distribution of Airbnb Listings by Bed Type")
+summary(new_df$Bed_Type)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(Bed_Type, 
+            Log_Price), 
+        data = new_df) + 
+  geom_jitter( alpha = .1)  + 
+  geom_boxplot( alpha = .5,color = 'blue')+
+  labs(x="Bed Type", y= "Log Price", title = "Distribution of Log Price by Bed Type")+
+  theme(panel.grid = element_blank())+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4) 
+```
+
+We can see that the most common type of bed amongst all properties is the 'Real bed'. However, we can't tell much about it's relationship with the price by looking at the plot above as it seems like all other types of beds result in an average listing price very close to each other.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+bed<-lm(formula = Log_Price ~ Bed_Type, data = new_df)
+summary(bed)
+```
+
+The p-values and the coeffiecients point us to the fact that having a real bed or a pull-out sofa has an upward affect on the price of the property. An air bed, couch or a futon lower the average price of the property. However, there's not a noticable difference between the average price of properties with an airbed, futon or a couch.
+
+## Cancellation Policy
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=Cancellation_Policy), data=new_df)+
+  geom_bar(aes(fill = Cancellation_Policy))+
+  theme(panel.grid = element_blank())+
+  labs(x="Cancellation Policy", y="# of Listings", title = "Distribution of Airbnb Lstings by Cancellation Policy")
+```
+
+For the purpose of analysis, we will onlly look at the three prominent policies, which are 'Flexible', 'Moderate' and 'Strict'.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(Cancellation_Policy, 
+            Log_Price), 
+        data = new_df) + 
+  geom_jitter( alpha = .1)  + 
+  geom_boxplot( alpha = .5,color = 'blue')+
+  theme(panel.grid = element_blank())+
+  labs(x="Cancellation Policy", y="Log Price", title = "Distribution of Log Price by Cancellation Policy")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4) 
+```
+
+It's hard to tell whether having a different policy makes a difference in the price. It's persumable that a property with a flexible policy might be more pricey in a sense that clients might pay a little more to avoid the risk of heavy cancellation charges. On the other hand, it may also cost less to rent a property with a flexible cancellation policy as a landlord of a property not so popular (low-priced) might want to add the benefit of a flexible policy to attract more clients. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+cancel<-lm(formula = Log_Price ~ Cancellation_Policy, data = new_df)
+summary(cancel)
+```
+The three different policies have different average slopes and the p-values are also significant which means that each of the policies affect the price differently. 
+
+## Cleaning Fee
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=Cleaning_Fee), data=new_df)+
+  geom_bar(aes(fill = Cleaning_Fee))+
+  theme(panel.grid = element_blank())+
+  labs(x="Cleaning Fee", y="# of Listings", title = "Distribution of Airbnb Listings by Cleaning Fee")
+```
+
+So, about 75% of the properties have a cleaning fee associated to them. We will now see if having a cleaning fee affects the property price.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(Cleaning_Fee, 
+            Log_Price), 
+        data = new_df) + 
+  geom_jitter( alpha = .1)  + 
+  geom_boxplot( alpha = .5,color = 'blue')+
+  theme(panel.grid = element_blank())+
+  labs(x="Cleaning Fee", y= "Log Price", title = "Distribution of Log Price by Cleaning Fee")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4) 
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+t.test(Log_Price ~ Cleaning_Fee, data = new_df,
+        var.equal = TRUE, alternative = "two.sided")
+```
+
+A significant p-value and a larger mean price for having a claning fee associated to the listing, suggests that having a cleaning fee increases the price of the property.
+
+## City
+
+Let's now look at the different cities and see how each city is doing in terms of business for Airbnb. Here's a plot comparing the total number of proprerty listings from each city.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=City), data=new_df)+
+  geom_bar(aes(fill = City))+
+  theme(panel.grid = element_blank())+
+  labs(x="City", y="# of Listings", title = "Distribution of Airbnb Listings by City")
+```
+
+Amongst the 6 cities mentioned above, New York and LA seem to have the most number of listings. This could be because of the city size, population, attractions or other factors. 
+
+I will now examine the price comparison between each city and find out whether the predictor 'City' has an effect on the dependent variable or not.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+new_df %>% 
+  group_by(City) %>% 
+  summarise(avg_price=mean(Log_Price), Count=n())
+```
+
+Grouping our data by city, we find that the average price differs across cities. Except for LA and New York which have almost the same average price. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(City, 
+            Log_Price), 
+        data = new_df) + 
+  geom_jitter( alpha = .1)  + 
+  geom_boxplot( alpha = .5,color = 'blue')+
+  theme(panel.grid = element_blank())+
+  labs(x="City", y="Log Price", title = "Distribution of Log Price by City")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4) 
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+cities<-lm(formula = Log_Price ~ City, data = new_df)
+summary(cities)
+```
+
+Performing further analysis, we find out that each city affects the price differently. This is evident through the significant p-values and the coefficient estimates for each city. Estimates are different across cities except for LA and New York. These are both large cities with similar demographics and we can expect them to have a similar demand.
+
+## Profile Picture
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=Profile_Pic), data=new_df)+
+  geom_bar(aes(fill = Profile_Pic))+
+  theme(panel.grid = element_blank())+
+  labs(x="Profile Picture", y="# of Listings", title = "Distribution of Airbnb Listings by Profile Picture")
+summary(new_df$Profile_Pic)
+```
+
+Almost all of the hosts have a profile picture. This may be a very important part of creating a profile or listing a property. 
+Let's look at how this affects the price.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(Profile_Pic, 
+            Log_Price), 
+        data = new_df) + 
+  geom_jitter( alpha = .1)  + 
+  geom_boxplot( alpha = .5,color = 'blue')+
+  theme(panel.grid = element_blank())+
+  labs(x="Profile Picture", y="Log Price", title = "Distribution of Log Price by Profile Picture")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(ggpubr)
+t.test(Log_Price ~ Profile_Pic, data = new_df,
+        var.equal = TRUE, alternative = "two.sided")
+```
+
+After applying the two-samples t-test, we find out that the p-value is significantly small and that we have enough evidence to reject the null hypothesis. The true difference in means is not equal to 0. However, the mean price is not too different between having a profile pic or not and the sample of people without a profile picture is relatively too small to conclude if the price depends on having a profile picture.
+
+## Instant Bookable
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=Instant_Bookable), data=new_df)+
+  geom_bar(aes(fill = Instant_Bookable))+
+  theme(panel.grid = element_blank())+
+  labs(x="Instant Bookable", y="# of Listings", title = "Distribution of Airbnb Listings by Booking Availability")
+```
+
+Most of the properties can not be booked instantly. This is due to several factors including security or availability of space.
+We will now find out if being able to book a property instantly does impact the price of the property.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(Instant_Bookable, 
+            Log_Price), 
+        data = new_df) + 
+  geom_jitter( alpha = .1)  + 
+  geom_boxplot( alpha = .5,color = 'blue')+
+  theme(panel.grid = element_blank())+
+  labs(x="Instant Bookable", y="Log Price", title = "Distribution of Log Price by Instant Booking")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+t.test(Log_Price ~ Instant_Bookable, data = new_df,
+        var.equal = TRUE, alternative = "two.sided")
+```
+
+Although, we have enough evidence to reject the null hypothesis, the difference between the two mean prices is approximately 1.5 %. Given this, it is hard to conclude whether difference was caused by the dependance on property being instantly bookable or due to some other reason.  
+
+## Number of Reviews
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=Number_of_Reviews), 
+        data = new_df) +
+  geom_histogram(fill = 'yellow', color = 'red', bins = 30) +
+  theme(panel.grid = element_blank())+
+    labs(x="# of Reviews", y="# of Listings", title = "Distribution of Airbnb Listings by # of Reviews")
+```
+
+The histogram shows us that more than half of the properties listed in our dataset have less than 20 reviews and most properties have less than 40 reviews except for a few which have more than 40-60 reviews. We will now find out if the price depends on the number of reviews or not. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=Number_of_Reviews, y=Log_Price), data = new_df)+
+  geom_jitter(alpha=0.1)+
+  geom_smooth(method = "lm", se = FALSE,size=1)+
+  theme(panel.grid = element_blank())+
+  labs(x="# of Reviews", y="Log Price", title = "Distribution of Log Price by # of Reviews")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+cor.test(new_df$Log_Price, new_df$Number_of_Reviews)
+```
+
+Reviews can be good or bad, regardless it is hard to confirm the dependence of price just based on the number of reviews. The correlation estimate is -0.007 which is very close to 0. There's hardly any association between the two variables. Review scores might however be a better predictor to look at how these reviews affect our final price.
+
+## Review Scores
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=Review_Scores), 
+        data = new_df) +
+  geom_histogram(fill = 'yellow', color = 'red', bins = 30)+
+  scale_y_log10()+
+  theme(panel.grid = element_blank())+
+  labs(x="Review Scores", y="# of Listings", title = "Distribution of Airbnb Listings by Review Scores")
+```
+
+Looking at the ratings, we notice that most of the properties have a rating 80 or higher. This is a positive result for Airbnb as most clients are satisfied with the service they have received.
+Let's find out if the price depends on these ratings or not.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=Review_Scores, y=Log_Price), data = new_df)+
+  geom_jitter(alpha=0.1)+
+  geom_smooth(method = "lm", se = FALSE,size=1)+
+  theme(panel.grid = element_blank())+
+  labs(x="Review Scores", y="Log Price", title = "Distribution of Log Price by Review Scores")
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+cor.test(new_df$Log_Price, new_df$Review_Scores)
+```
+There is a positive correlation between the ratings and the price which is about 0.1. In addition, the p-value is significantly small to reject the null hypothesis.
+This suggests, as the value of 'Review_Scores' increases so does the variable 'Log_Price'. 
+
+## Bedrooms
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+Bedroom <- factor(new_df$Bedrooms)
+ggplot(aes(x=Bedroom), data=new_df)+
+  geom_bar(aes(fill = Bedroom))+
+  theme(panel.grid = element_blank())+
+  labs(x="Bedrooms", y="# of Listings", title = "Distribution of Airbnb Listings by # of Bedrooms")
+```
+
+More than 85% of our dataset is comprised of listings with 1,2 or 3 bedrooms. Most of them have 1 bedroom. However, there are also listings that have 4,5,6 or 7 bedrooms. The number of listings with more than 7 bedrooms is very limited. Let's find out if the price depends on the number of bedrooms or not.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(Bedroom, 
+            Log_Price), 
+        data = new_df) + 
+  geom_jitter( alpha = .1)  + 
+  geom_boxplot( alpha = .5,color = 'blue')+
+  theme(panel.grid = element_blank())+
+  labs(x="Bedrooms", y="Log Price", title = "Distribution of Log Price by # of Bedrooms")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)
+```
+
+Just by looking at the plot we do observe an increasing tend betwwen the number of bedrooms and the price. This means that properties with more bedrooms are generally priced more. Our assumption seems logical. We will now perform a regression analysis to look more deeply inide the reltionship between the price and number of bedrooms.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+number_of_bedrooms<-lm(formula = Log_Price ~ Bedroom, data = new_df)
+summary(number_of_bedrooms)
+```
+Between the bedrooms 1 and 7, the price increases continually. The p-values are significantly small and the difference between the coefficients clearly tells us that the price of a property varies with the number of bedrooms. More bedrooms means a higher price generally except for a few anomalies. In those cases, other factors are more prominent.
+
+## Beds
+
+We found out that the number of bedrooms has an increasing effect on the price. We'll now look at the 'Beds' variable and see if it has a similar effect on the price. We assume it does because beds and bedrooms are compliments as you can't have more bedrooms without having more beds or vice versa. Let's see if that is the case.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+Bed <- factor(new_df$Beds)
+ggplot(aes(x=Bed), data=new_df)+
+  geom_bar(aes(fill = Bed))+
+  labs(x="# of Beds", y="# of Listings", title = "Distribution of Airbnb Listings by # of Beds")
+```
+
+Again, our observations for this variable are pretty similar to what we found out earlier for the number of bedrooms. Most of the listings are comprised of 1,2 or 3 beds. Having more beds would generally mean a higher price. let's find out if that is true.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(Bed, 
+            Log_Price), 
+        data = new_df) + 
+  geom_jitter( alpha = .1)  + 
+  geom_boxplot( alpha = .5,color = 'blue')+
+  labs(x="Beds", y= "Log Price", title = "Distribution of Log Price by # of Beds")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)
+```
+
+We observe that the price is increasing as the number of beds increase, especially between 1 and 7 bedrooms and that is where most of the data is distributed. So we're pretty confident about the positive correlation between price and the number of beds.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+number_of_beds<-lm(formula = Log_Price ~ Bed, data = new_df)
+summary(number_of_beds)
+```
+
+We are certain that the price responds differently to properties with less number of beds than those with more beds. The coeeficient estimate for each number of beds is different from the other. This means each of them impact the price differently.
+
+## Amenities
+
+As far as the amenities are concerned I will not go into deep analysis for each one of them. However I will look into how each of them affect the price, starting with TV.
+
+### TV
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(TV, 
+            Log_Price), 
+        data = new_df) + 
+  geom_jitter( alpha = .1)  + 
+  geom_boxplot( alpha = .5,color = 'blue')+
+  labs(x="TV", y= "Log Price", title = "Distribution of Log Price by TV")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)
+```
+
+The plot shows that the mean price for properties without a TV is lower than those that come with a TV. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+t.test(Log_Price ~ TV, data = new_df,
+        var.equal = TRUE, alternative = "two.sided")
+```
+
+A very low p-value indicates that there is a significant difference in the mean price between properties with a TV and without a TV. Therefore, having a TV generally does increase the price of the property.
+
+### Internet
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(Internet, 
+            Log_Price), 
+        data = new_df) + 
+  geom_jitter( alpha = .1)  + 
+  geom_boxplot( alpha = .5,color = 'blue')+
+  labs(x="Internet", y= "Log Price", title = "Distribution of Log Price by Internet")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)
+```
+
+Having internet is a huge factor. At least I would not rent a place without internet. I'm surprised that the difference between the two means is not too high just by looking at the plot. Let's perform an unpaired t-test to verify our results.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+t.test(Log_Price ~ Internet, data = new_df,
+        var.equal = TRUE, alternative = "two.sided")
+```
+
+There's actually a good difference between the two means and the p-value is also significantly low which suggests that normally a property without internet has a lower price than a property that includes internet service. 
+
+### Parking
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(Parking, 
+            Log_Price), 
+        data = new_df) + 
+  geom_jitter( alpha = .1)  + 
+  geom_boxplot( alpha = .5,color = 'blue')+
+  labs(x="Parking", y= "Log Price", title = "Distribution of Log Price by Parking")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)
+```
+
+The plot fails to show any significant difference in the mean price between a property with free parking and a property without one. Also, it is evident that out of the listed properties, most of them do not provide parking or at least it is not free. This is a reasonable assumption as a lot of people that rent on Airbnb are travellers or visitors so they may not need a car parking. Let's perform a t-test and find out.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+t.test(Log_Price ~ Parking, data = new_df,
+        var.equal = TRUE, alternative = "two.sided")
+```
+
+Although there is a difference between the two means, it's clearly not large enough to conclude that having a parking effects the price in any significant way.
+
+### Kitchen
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(Kitchen, 
+            Log_Price), 
+        data = new_df) + 
+  geom_jitter( alpha = .1)  + 
+  geom_boxplot( alpha = .5,color = 'blue')+
+  labs(x="Kitchen", y= "Log Price", title = "Distribution of Log Price by Kitchen")+
+  stat_summary(fun.y = "mean", 
+               geom = "point", 
+               color = "red", 
+               shape = 8, 
+               size = 4)
+```
+
+Kitchen is essentially one of the most important parts of a rental property. It is really surprising that there are actually this many properties without a kitchen in our dataset.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+t.test(Log_Price ~ Kitchen, data = new_df,
+        var.equal = TRUE, alternative = "two.sided")
+```
+
+Well, there is no doubt that a property without a kitchen would be listed for much less than a property with one. A very low p-value, the difference between the mean prices and the plot clearly simplifies our assumption.
+
+After this analysis, I have decided on which variables I will include in my model and which ones to exclude. 
+The significant redictors are:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+Significant_Predictors <- c('Property Type', 'Room Type', 'Accommodates', 'Bathrooms', 'City', 'Bed Type', 'Cancellation Policy', 'Cleaning Fee', 'Review Scores Rating', 'Beds', 'TV', 'Internet', 'Kitchen')
+modelling_data <- data.frame(Significant_Predictors)
+modelling_data
+```
+
+The nonsignificant predictors are:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+Nonsignificant_predictors <- c('Number of Reviews', 'Instant Bookable', 'Profile Picture', 'Bedrooms', 'Parking')
+data_excluded <- data.frame(Nonsignificant_predictors)
+data_excluded
+```
