@@ -1,0 +1,103 @@
+---
+title: "Machine Learning Techniques Applied to the Capstone Project"
+author: "Aarij Khawaja"
+date: '2019-03-31'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+suppressWarnings(library(ggplot2))
+suppressWarnings(library(gridExtra))
+df <- read.csv('train.csv')
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(lattice)
+df_1 <- df %>% select(log_price, property_type, room_type, accommodates, bathrooms, bed_type, cancellation_policy, city, number_of_reviews, review_scores_rating, bedrooms, beds)%>% mutate(TV = ifelse(grepl("TV", df$amenities), T, F) ) %>% mutate(internet = ifelse(grepl("Internet", df$amenities), T, F) ) %>% mutate(parking = ifelse(grepl("parking", df$amenities), T, F) ) %>% mutate(kitchen = ifelse(grepl("Kitchen", df$amenities), T, F) ) %>% mutate(cleaning_fee = ifelse(grepl("True", df$cleaning_fee), T, F) ) %>%
+mutate(profile_pic = ifelse(grepl("t", df$host_has_profile_pic), T, F) ) %>%
+mutate(instant_bookable = ifelse(grepl("t", df$instant_bookable), T, F) ) %>% 
+filter(property_type=="Apartment"|property_type=="Bed & Breakfast"|property_type=="Boat"|property_type=="Boutique hotel"|property_type=="Bungalow"|property_type=="Cabin"|property_type=="Camper/RV"|property_type=="House"|property_type=="Condominium"|property_type=="Townhouse"|property_type=="Loft"|property_type=="Other"|property_type=="Guesthouse"|property_type=="Villa"|property_type=="Dorm"|property_type=="Guest suite"|property_type=="Timeshare"|property_type=="In-law"|property_type=="Hostel"|property_type=="Serviced apartment"|property_type=="Tent"|property_type=="Castle"|property_type=="Vacation home") %>% filter(cancellation_policy=="flexible"|cancellation_policy=="moderate"|cancellation_policy=="strict")
+new_df <- na.omit(df_1)
+colnames(new_df) <- c("Log_Price", "Property_Type", "Room_Type", "Accommodates", "Bathrooms", "Bed_Type", "Cancellation_Policy", "City", "Number_of_Reviews", "Review_Scores", "Bedrooms", "Beds", "TV", "Internet", "Parking", "Kitchen", "Cleaning_Fee", "Profile_Pic", "Instant_Bookable")
+head(new_df)
+```
+
+After applying multiple model selection algorithms and performing exhaustive assumption tests  to check for multicollinearity within the model, I decided to include only the most important predictors. These include:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+Significant_Predictors <- c('Property Type', 'Room Type', 'Accommodates', 'Bathrooms', 'City', 'Bed Type', 'Cancellation Policy', 'Cleaning Fee', 'Review Scores Rating', 'Beds', 'TV', 'Internet', 'Kitchen')
+modelling_data <- data.frame(Significant_Predictors)
+modelling_data
+```
+
+The nonsignificant predictors are:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+Nonsignificant_predictors <- c('Number of Reviews', 'Instant Bookable', 'Profile Picture', 'Bedrooms', 'Parking')
+data_excluded <- data.frame(Nonsignificant_predictors)
+data_excluded
+```
+
+## Final Data
+
+Now that we know which variables to include in the model, I have compiled a data set named 'final_data'. This includes log_price and columns with only the significant predictors. For Bathrooms, Beds and Accommodates we will consider them as categorical variables instead of continuous because we have a discrete selection from each of those predictors. What I mean is that the variable 'Bathroom' has 17 levels, the variable 'Beds' has 18 levels and the variable 'Accommodates' has 16 levels. The predictor 'Bedrooms' may seem like an important one but the reason I excluded that is because it is directly proportional to the number of beds and including it alongside with 'Beds' will result in multicollinearity within the model. Here is the new dataset:
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+Accommodate <- factor(new_df$Accommodates)
+Bathroom <- factor(new_df$Bathrooms)
+Bed <- factor(new_df$Beds)
+
+final_data<- new_df %>% select(Log_Price, Property_Type, Room_Type, City, Bed_Type, Cancellation_Policy, Cleaning_Fee, Review_Scores, TV, Internet, Kitchen) %>% mutate(Accommodates = Accommodate, Bathrooms = Bathroom, Beds = Bed)
+
+head(final_data)
+```
+
+## Train the Model
+
+I will now seperate the data into training and testing, then use the random Forest method on the training set to train the model. Once the model is trained, I wil apply that to the testing set to predict the dependent variable which is Log_Price. I will also be tuning the model by using the 'grid search' method and  adding parameters for better results.
+
+After applying mutiple parameters and using a for loop of grid search with various combinations of trees and model selection metrics, I used the following model: 
+
+```{r message=FALSE, warning=FALSE}
+library(caret)
+# ensure results are repeatable
+set.seed(123)
+inTraining <- createDataPartition(final_data$Log_Price, p = .8, list = FALSE)
+training <- final_data[ inTraining,]
+testing  <- final_data[-inTraining,]
+# Manual Grid Search
+control <- trainControl(method="repeatedcv", 
+                        number=5, 
+                        repeats=1, 
+                        search="grid")
+tunegrid <- expand.grid(.mtry=8)
+model <- train(Log_Price ~.,
+               data=training, 
+               method="rf", 
+               metric="RMSE", 
+               tuneGrid=tunegrid, 
+               trControl=control,
+               ntree=200)
+#R-squared training
+predicted_tr <- predict(model, newdata=training, select = -c(Log_Price))
+actual_tr <- training$Log_Price
+rsq_tr <- 1-sum((actual_tr-predicted_tr)^2)/sum((actual_tr-mean(actual_tr))^2)
+print(paste("Training R-squared is: ", round(rsq_tr, 2)))
+```
+
+R-squared is the proportion of the variance in the dependent variable that is predictable from the independent variable. In, short R-squared is a meausure of model accuracy and lies between 0 and 1. A larger R-squared means a larger amount of variation in the dependent variable is predictable. But that's not always the case; R-squared can be overestimated by overfitting, bias or multi-collinearity.
+
+## Model Performance
+
+Let's now measure the model performance by finding R-squared for the testing data:
+```{r message=FALSE, warning=FALSE}
+# predict the outcome of the testing data
+predicted <- predict(model, newdata=testing, select = -c(Log_Price))
+actual <- testing$Log_Price
+rsq_tst <- 1-sum((actual-predicted)^2)/sum((actual-mean(actual))^2)
+
+print(paste("Testing R-squared is: ", round(rsq_tst, 2)))
+```
