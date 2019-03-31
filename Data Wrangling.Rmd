@@ -1,0 +1,27 @@
+---
+title: "Data Wrangling Section"
+author: "Aarij Khawaja"
+date: '30th March, 2019'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+suppressWarnings(library(ggplot2))
+suppressWarnings(library(gridExtra))
+df <- read.csv('train.csv')
+```
+# Data Wrangling Techniques Applied to the Capstone Project
+
+Let's explore some data pre-processing techniques and apply them to our dataset. In our data set we have some variables that are not too relevant for the data analysis. Therefore, we will exclude these variables from our data set. Some of these include include 'id', 'Description', 'Date of First Review',  'Last Review Date', 'Listing url' and 'Zip Code'. This leaves us with 18 predictors, some of them are continuous and most of them categorical. I made sure the dataset looks clean and organized and made sure there were no missing values. I have filtered out variable occurences that are relevant to our sample size. In addition, I have also added some new variables by extracting information between the text.
+Here is what our new dataset looks like:
+
+```{r message=FALSE, warning=FALSE}
+library(dplyr)
+df_1 <- df %>% select(log_price, property_type, room_type, accommodates, bathrooms, bed_type, cancellation_policy, city, number_of_reviews, review_scores_rating, bedrooms, beds)%>% mutate(TV = ifelse(grepl("TV", df$amenities), T, F) ) %>% mutate(internet = ifelse(grepl("Internet", df$amenities), T, F) ) %>% mutate(parking = ifelse(grepl("parking", df$amenities), T, F) ) %>% mutate(kitchen = ifelse(grepl("Kitchen", df$amenities), T, F) ) %>% mutate(cleaning_fee = ifelse(grepl("True", df$cleaning_fee), T, F) ) %>%
+mutate(profile_pic = ifelse(grepl("t", df$host_has_profile_pic), T, F) ) %>%
+mutate(instant_bookable = ifelse(grepl("t", df$instant_bookable), T, F) ) %>% 
+filter(property_type=="Apartment"|property_type=="Bed & Breakfast"|property_type=="Boat"|property_type=="Boutique hotel"|property_type=="Bungalow"|property_type=="Cabin"|property_type=="Camper/RV"|property_type=="House"|property_type=="Condominium"|property_type=="Townhouse"|property_type=="Loft"|property_type=="Other"|property_type=="Guesthouse"|property_type=="Villa"|property_type=="Dorm"|property_type=="Guest suite"|property_type=="Timeshare"|property_type=="In-law"|property_type=="Hostel"|property_type=="Serviced apartment"|property_type=="Tent"|property_type=="Castle"|property_type=="Vacation home") %>% filter(cancellation_policy=="flexible"|cancellation_policy=="moderate"|cancellation_policy=="strict")
+new_df <- na.omit(df_1)
+colnames(new_df) <- c("Log_Price", "Property_Type", "Room_Type", "Accommodates", "Bathrooms", "Bed_Type", "Cancellation_Policy", "City", "Number_of_Reviews", "Review_Scores", "Bedrooms", "Beds", "TV", "Internet", "Parking", "Kitchen", "Cleaning_Fee", "Profile_Pic", "Instant_Bookable")
+head(new_df)
+```
